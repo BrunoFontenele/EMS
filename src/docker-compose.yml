@@ -1,0 +1,52 @@
+version: '3.8'
+
+services:
+  postgres:
+    image: postgres:14-alpine
+    container_name: ems-postgres
+    ports:
+      - "7654:5432"
+    environment:
+      POSTGRES_DB: emsdb
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: ${DB_PASSWORD:-postgres}
+    volumes:
+      - db-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -d emsdb"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: ems-backend
+    ports:
+      - "8080:8080"
+    volumes:
+      - ./backend/uploads:/app/uploads
+    depends_on:
+      postgres:
+        condition: service_healthy
+    environment:
+      SPRING_DATASOURCE_URL: jdbc:postgresql://postgres:5432/emsdb
+      SPRING_DATASOURCE_USERNAME: postgres
+      SPRING_DATASOURCE_PASSWORD: ${DB_PASSWORD:-postgres}
+      JWT_SECRET: ${JWT_SECRET:-404E635266556A586E3272357538782F413F4428472B4B6250645367566B5970}
+
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    container_name: ems-frontend
+    ports:
+      - "8081:8081"
+    depends_on:
+      - backend
+    environment:
+      VITE_ROOT_API: http://localhost:8080
+
+volumes:
+  db-data:
